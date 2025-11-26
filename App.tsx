@@ -234,7 +234,17 @@ const App: React.FC = () => {
             />
             <div>
               <h1 className="text-sm sm:text-xl font-bold tracking-tight text-white">VFX Price Architect</h1>
-              <p className="text-[10px] sm:text-xs text-neutral-500 font-medium text-yellow-500/80">by Chicken can't fly studio</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                <p className="text-[10px] sm:text-xs text-neutral-500 font-medium text-yellow-500/80">by Chicken can't fly studio</p>
+                <a 
+                  href="https://www.kaung.cc" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-[10px] sm:text-xs text-neutral-600 hover:text-white transition-colors"
+                >
+                  www.kaung.cc
+                </a>
+              </div>
             </div>
           </div>
           

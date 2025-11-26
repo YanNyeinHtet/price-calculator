@@ -240,7 +240,7 @@ export const OPTION_DETAILS = {
     [Complexity.HARD]: "Immediate turnaround required, 24/7 crunch (e.g., overnight/same day).",
   },
   BRIEF: {
-    [BriefType.CLEAR]: "Detailed storyboard, locked edit, and references provided. No extra cost.",
+    [BriefType.CLEAR]: "", // Description removed per request
     [BriefType.NOT_CLEAR]: "Vague concepts, loose timeline, or requires extensive R&D/Look-dev. Adds 40% surcharge.",
   },
 };

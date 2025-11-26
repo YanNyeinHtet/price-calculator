@@ -58,6 +58,8 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ breakdown, currencyS
     doc.text("+959792717361", pageWidth - margin, yPos, { align: 'right' });
     yPos += 6;
     doc.text("yannyeinhtet@gmail.com", pageWidth - margin, yPos, { align: 'right' });
+    yPos += 6;
+    doc.text("www.kaung.cc", pageWidth - margin, yPos, { align: 'right' });
     doc.text("Date: " + new Date().toLocaleDateString(), margin, yPos);
 
     // --- Divider ---
@@ -275,6 +277,7 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ breakdown, currencyS
               This is an automated estimate. Final costs may vary. 
               <br/>Contact Studio: <span className="text-neutral-300">+959792717361</span>
               <br/>Email: <span className="text-neutral-300">yannyeinhtet@gmail.com</span>
+              <br/>Website: <span className="text-neutral-300">www.kaung.cc</span>
             </div>
           </div>
         </div>
