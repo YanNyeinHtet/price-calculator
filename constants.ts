@@ -1,7 +1,7 @@
 
 import { Complexity, Resolution, FPS, Management, ReelPermission, BriefType } from './types';
 
-export const DEFAULT_BASE_PRICE = 10000; // Updated default for MMK scale
+export const DEFAULT_BASE_PRICE = 13500; // Updated default for MMK scale
 export const DEFAULT_DURATION = 5;
 
 // Theme: Yellow, Red, White, Black
@@ -24,10 +24,10 @@ export const MULTIPLIERS = {
     [Resolution.RES_4K]: 0.20,
     [Resolution.RES_6K]: 0.40,
   },
-  // FPS Logic: 60fps is 2x the RESOLUTION PRICE (not base price)
+  // FPS Logic: 60fps adds 20% to the SCENE TOTAL (Calculated in utils)
   FPS_FACTOR: {
     [FPS.FPS_30]: 0,
-    [FPS.FPS_60]: 2, // 2x the resolution cost
+    [FPS.FPS_60]: 0.20, 
   },
   
   // --- PRE-PRODUCTION (Applied to Base * Duration) ---
@@ -240,7 +240,7 @@ export const OPTION_DETAILS = {
     [Complexity.HARD]: "Immediate turnaround required, 24/7 crunch (e.g., overnight/same day).",
   },
   BRIEF: {
-    [BriefType.CLEAR]: "", // Description removed per request
+    [BriefType.CLEAR]: "", 
     [BriefType.NOT_CLEAR]: "Vague concepts, loose timeline, or requires extensive R&D/Look-dev. Adds 40% surcharge.",
   },
 };

@@ -71,6 +71,13 @@ export interface VFXShotData {
   allowOnReel: ReelPermission;
 }
 
+export interface Scene {
+  id: string;
+  name: string;
+  description?: string;
+  data: VFXShotData;
+}
+
 export interface CostBreakdown {
   baseCost: number;
   resolutionCost: number;

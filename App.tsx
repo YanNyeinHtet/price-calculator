@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   VFXShotData, 
   Complexity, 
@@ -8,9 +8,10 @@ import {
   Management, 
   ReelPermission,
   BriefType,
-  CostBreakdown 
+  Scene 
 } from './types';
-import { MULTIPLIERS, DEFAULT_BASE_PRICE, DEFAULT_DURATION, OPTION_DETAILS } from './constants';
+import { DEFAULT_BASE_PRICE, DEFAULT_DURATION, OPTION_DETAILS } from './constants';
+import { calculateBreakdown, formatMoney } from './utils';
 import { InputGroup, RadioCards } from './components/InputGroup';
 import { ResultsPanel } from './components/ResultsPanel';
 import { 
@@ -34,169 +35,198 @@ import {
   Sparkles,
   Film,
   Timer,
-  FileText
+  FileText,
+  Plus,
+  Trash2,
+  Edit2,
+  AlignLeft,
+  Download,
+  Upload,
+  Save
 } from 'lucide-react';
 
-const formatMoney = (amount: number) => {
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' MMK';
+// Default Data Template
+const DEFAULT_SHOT_DATA: VFXShotData = {
+  basePrice: DEFAULT_BASE_PRICE,
+  duration: DEFAULT_DURATION,
+  resolution: Resolution.RES_1080,
+  fps: FPS.FPS_30,
+  // Prep
+  roto: Complexity.NONE,
+  cleanup: Complexity.NONE,
+  keying: Complexity.NONE,
+  cameraTracking: Complexity.NONE,
+  objectTracking: Complexity.NONE,
+  matchMove: Complexity.NONE,
+  // Production
+  model3d: Complexity.NONE,
+  rigging: Complexity.NONE,
+  sceneReconstruction: Complexity.NONE,
+  propsEnvs: Complexity.NONE,
+  animation: Complexity.NONE,
+  mocap: Complexity.NONE,
+  simulation: Complexity.NONE,
+  // Post
+  compositing3d: Complexity.NONE,
+  compositing2d: Complexity.NONE,
+  layerAnimation: Complexity.NONE,
+  // Extras
+  urgent: Complexity.NONE,
+  brief: BriefType.CLEAR,
+  // Mgmt
+  onSceneManagement: Management.NO,
+  allowOnReel: ReelPermission.NO,
+};
+
+// Demo Scenes for first-time use
+const DEMO_SCENE_1: Scene = {
+  id: '1',
+  name: 'Hero Landing',
+  description: 'Hero superhero landing with dust debris. Needs camera tracking and dust simulation.',
+  data: {
+    ...DEFAULT_SHOT_DATA,
+    duration: 4,
+    resolution: Resolution.RES_4K,
+    cameraTracking: Complexity.MEDIUM,
+    simulation: Complexity.EASY,
+    compositing3d: Complexity.EASY,
+    cleanup: Complexity.EASY,
+    onSceneManagement: Management.YES,
+  }
+};
+
+const DEMO_SCENE_2: Scene = {
+  id: '2',
+  name: 'Robot Reveal',
+  description: 'Close up of a robot face opening. Complex hard surface rigging and compositing.',
+  data: {
+    ...DEFAULT_SHOT_DATA,
+    duration: 6,
+    resolution: Resolution.RES_1080,
+    fps: FPS.FPS_60,
+    model3d: Complexity.MEDIUM,
+    rigging: Complexity.HARD,
+    animation: Complexity.EASY,
+    compositing3d: Complexity.MEDIUM,
+    allowOnReel: ReelPermission.YES,
+  }
 };
 
 const App: React.FC = () => {
-  // State initialization
-  const [shotData, setShotData] = useState<VFXShotData>({
-    basePrice: DEFAULT_BASE_PRICE,
-    duration: DEFAULT_DURATION,
-    resolution: Resolution.RES_1080,
-    fps: FPS.FPS_30,
-    // Prep
-    roto: Complexity.NONE,
-    cleanup: Complexity.NONE,
-    keying: Complexity.NONE,
-    cameraTracking: Complexity.NONE,
-    objectTracking: Complexity.NONE,
-    matchMove: Complexity.NONE,
-    // Production
-    model3d: Complexity.NONE,
-    rigging: Complexity.NONE,
-    sceneReconstruction: Complexity.NONE,
-    propsEnvs: Complexity.NONE,
-    animation: Complexity.NONE,
-    mocap: Complexity.NONE,
-    simulation: Complexity.NONE,
-    // Post
-    compositing3d: Complexity.NONE,
-    compositing2d: Complexity.NONE,
-    layerAnimation: Complexity.NONE,
-    // Extras
-    urgent: Complexity.NONE,
-    brief: BriefType.CLEAR, // Default to Clear (No Cost)
-    // Mgmt
-    onSceneManagement: Management.NO, // Default to No (no discount)
-    allowOnReel: ReelPermission.NO,
-  });
+  // State: Scenes Array initialized with Demo Scenes
+  const [scenes, setScenes] = useState<Scene[]>([DEMO_SCENE_1, DEMO_SCENE_2]);
+  const [activeSceneId, setActiveSceneId] = useState<string>('1');
+  
+  // File Input Ref for Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Helpers
+  const activeScene = scenes.find(s => s.id === activeSceneId) || scenes[0];
+  const activeShotData = activeScene.data;
 
-  // Calculation Logic
-  const breakdown = useMemo<CostBreakdown>(() => {
-    const { 
-      basePrice, duration, resolution, fps, 
-      roto, cleanup, keying, 
-      cameraTracking, objectTracking, matchMove,
-      model3d, rigging, sceneReconstruction, propsEnvs,
-      animation, mocap, simulation,
-      compositing3d, compositing2d, layerAnimation,
-      urgent, brief,
-      onSceneManagement, allowOnReel
-    } = shotData;
+  // Calculate breakdown only for the active scene
+  const breakdown = useMemo(() => calculateBreakdown(activeShotData), [activeShotData]);
+  
+  // Calculate total project cost for Header
+  const projectTotal = useMemo(() => {
+    return scenes.reduce((sum, scene) => sum + calculateBreakdown(scene.data).total, 0);
+  }, [scenes]);
 
-    const baseCostOfShot = basePrice * duration;
+  // Handlers - Data Updates
+  const updateActiveSceneData = (key: keyof VFXShotData, value: any) => {
+    setScenes(prev => prev.map(scene => 
+      scene.id === activeSceneId 
+        ? { ...scene, data: { ...scene.data, [key]: value } }
+        : scene
+    ));
+  };
 
-    // 1. Resolution Cost
-    const resMultiplier = MULTIPLIERS.RESOLUTION[resolution];
-    const resolutionCost = baseCostOfShot * resMultiplier;
+  const updateActiveSceneInfo = (key: 'name' | 'description', value: string) => {
+    setScenes(prev => prev.map(scene => 
+      scene.id === activeSceneId 
+        ? { ...scene, [key]: value }
+        : scene
+    ));
+  };
 
-    // 2. FPS Cost
-    const fpsMultiplier = MULTIPLIERS.FPS_FACTOR[fps];
-    const fpsCost = resolutionCost * fpsMultiplier;
-
-    // 3. Prep / Post Production Steps (Multiplied by Duration)
-    const rotoCost = baseCostOfShot * MULTIPLIERS.ROTO[roto];
-    const cleanupCost = baseCostOfShot * MULTIPLIERS.CLEANUP[cleanup];
-    const keyingCost = baseCostOfShot * MULTIPLIERS.KEYING[keying];
-    const camTrackCost = baseCostOfShot * MULTIPLIERS.CAM_TRACK[cameraTracking];
-    const objTrackCost = baseCostOfShot * MULTIPLIERS.OBJ_TRACK[objectTracking];
-    const matchMoveCost = baseCostOfShot * MULTIPLIERS.MATCH_MOVE[matchMove];
-
-    const trackingTotal = camTrackCost + objTrackCost + matchMoveCost;
-
-    // 4. Production: Assets (Flat Fee based on BasePrice, NOT Duration)
-    const modelCost = basePrice * MULTIPLIERS.MODEL_3D[model3d];
-    const riggingCost = basePrice * MULTIPLIERS.RIGGING[rigging];
-    const sceneCost = basePrice * MULTIPLIERS.SCENE_RECON[sceneReconstruction];
-    const propsCost = basePrice * MULTIPLIERS.PROPS_ENV[propsEnvs];
-    
-    const assetCost = modelCost + riggingCost + sceneCost + propsCost;
-
-    // 5. Production: Animation & FX (Multiplied by Duration)
-    const animCost = baseCostOfShot * MULTIPLIERS.ANIMATION[animation];
-    const mocapCost = baseCostOfShot * MULTIPLIERS.MOCAP[mocap];
-    const simCost = baseCostOfShot * MULTIPLIERS.SIMULATION[simulation];
-
-    // 6. Post Production (Multiplied by Duration)
-    const comp3dCost = baseCostOfShot * MULTIPLIERS.COMPOSITING_3D[compositing3d];
-    const comp2dCost = baseCostOfShot * MULTIPLIERS.COMPOSITING_2D[compositing2d];
-    const layerAnimCost = baseCostOfShot * MULTIPLIERS.LAYER_ANIM[layerAnimation];
-
-    // 7. Extras (Multiplied by Duration)
-    const urgentCost = baseCostOfShot * MULTIPLIERS.URGENT[urgent];
-    
-    // Brief Cost: 40% of BasePrice * Duration if Not Clear
-    const briefCost = baseCostOfShot * MULTIPLIERS.BRIEF[brief];
-
-    const subTotal = 
-      baseCostOfShot + 
-      resolutionCost + 
-      fpsCost + 
-      rotoCost + 
-      cleanupCost + 
-      keyingCost + 
-      trackingTotal +
-      assetCost +
-      animCost +
-      mocapCost +
-      simCost +
-      comp3dCost +
-      comp2dCost +
-      layerAnimCost +
-      urgentCost +
-      briefCost;
-
-    // 8. Management Discount
-    // Using simple lookup now that constants are correct
-    const managementAdjustment = subTotal * MULTIPLIERS.MANAGEMENT[onSceneManagement];
-
-    // 9. Reel Discount
-    // Calculated from the total after management discount
-    const totalAfterMgmt = subTotal + managementAdjustment;
-    let reelDiscount = 0;
-    if (allowOnReel === ReelPermission.YES) {
-      reelDiscount = totalAfterMgmt * MULTIPLIERS.REEL_PERMISSION[ReelPermission.YES];
-    }
-
-    const total = totalAfterMgmt + reelDiscount;
-
-    return {
-      baseCost: baseCostOfShot,
-      resolutionCost,
-      fpsCost,
-      rotoCost,
-      cleanupCost,
-      keyingCost,
-      trackingCost: trackingTotal,
-      assetCost,
-      animationCost: animCost + mocapCost,
-      simulationCost: simCost,
-      compositingCost: comp3dCost + comp2dCost,
-      layerAnimCost,
-      urgentCost,
-      briefCost,
-      managementAdjustment,
-      reelDiscount,
-      total
-    };
-  }, [shotData]);
-
-  // Handlers
   const handleComplexityChange = (key: keyof VFXShotData) => (value: string) => {
-    setShotData(prev => ({ ...prev, [key]: value }));
+    updateActiveSceneData(key, value);
   };
 
   const handleNumberChange = (key: keyof VFXShotData) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    setShotData(prev => ({ ...prev, [key]: isNaN(val) ? 0 : val }));
+    updateActiveSceneData(key, isNaN(val) ? 0 : val);
   };
 
-  // Styles - Yellow/Red/Black Theme
-  // Easy: Yellow, Medium: Orange, Hard: Red
+  // Handlers - Scene Management
+  const addScene = () => {
+    const newId = (Math.max(...scenes.map(s => parseInt(s.id))) + 1).toString();
+    const newScene: Scene = {
+      id: newId,
+      name: `Scene ${newId}`,
+      description: '',
+      data: { ...DEFAULT_SHOT_DATA } // Copy defaults
+    };
+    setScenes([...scenes, newScene]);
+    setActiveSceneId(newId);
+  };
+
+  const deleteScene = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (scenes.length <= 1) return; // Prevent deleting last scene
+    
+    const newScenes = scenes.filter(s => s.id !== id);
+    setScenes(newScenes);
+    if (activeSceneId === id) {
+      setActiveSceneId(newScenes[0].id);
+    }
+  };
+
+  // Handlers - Import / Export
+  const handleExportProject = () => {
+    const projectData = JSON.stringify(scenes, null, 2);
+    const blob = new Blob([projectData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `VFX_Project_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedScenes = JSON.parse(content) as Scene[];
+        
+        // Basic validation
+        if (Array.isArray(importedScenes) && importedScenes.length > 0 && importedScenes[0].data) {
+          setScenes(importedScenes);
+          setActiveSceneId(importedScenes[0].id);
+        } else {
+          alert('Invalid project file format.');
+        }
+      } catch (error) {
+        console.error('Error parsing project file:', error);
+        alert('Failed to load project file.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be selected again
+    event.target.value = ''; 
+  };
+
+  // Styles
   const complexityColors = {
     [Complexity.NONE]: 'bg-neutral-900 border-neutral-800 text-neutral-500',
     [Complexity.EASY]: 'bg-yellow-900/20 border-yellow-700 text-yellow-500',
@@ -223,6 +253,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-neutral-100 pb-20">
+      {/* Hidden File Input for Import */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        accept=".json" 
+        className="hidden" 
+      />
+
       {/* Header */}
       <header className="border-b border-neutral-900 bg-black/90 backdrop-blur-md sticky top-0 z-50 transition-all duration-200">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -248,17 +287,105 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          {/* Mobile Sticky Price Display */}
+          {/* Mobile Sticky Price Display (Total Project) */}
           <div className="flex flex-col items-end lg:hidden">
-             <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider">Estimated Cost</span>
+             <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wider">Project Total</span>
              <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-600 leading-none">
-               {formatMoney(breakdown.total)}
+               {formatMoney(projectTotal)}
              </span>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        
+        {/* Scene Manager - Redesigned Film Strip Style */}
+        <div className="mb-8">
+          <div className="flex flex-row items-center justify-between mb-4 gap-4">
+            <h2 className="text-white font-bold flex items-center gap-2 text-lg">
+              <Film size={20} className="text-yellow-500" />
+              Scenes & Shots
+            </h2>
+            
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={addScene}
+                className="flex items-center gap-2 text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg border border-neutral-700 transition-colors shadow-sm"
+              >
+                <Plus size={14} className="text-yellow-500" /> Add Scene
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin snap-x">
+            {scenes.map(scene => {
+               const sceneTotal = calculateBreakdown(scene.data).total;
+               return (
+                <div 
+                  key={scene.id}
+                  onClick={() => setActiveSceneId(scene.id)}
+                  className={`
+                    relative group flex-shrink-0 flex flex-col w-56 p-4 rounded-xl border cursor-pointer transition-all duration-300 snap-start
+                    ${activeSceneId === scene.id 
+                      ? 'bg-neutral-900 border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.25)] translate-y-0' 
+                      : 'bg-black border-neutral-800 hover:border-neutral-700 hover:-translate-y-1'
+                    }
+                  `}
+                >
+                  {/* Header: Name & Delete */}
+                  <div className="flex justify-between items-start mb-2">
+                    <input 
+                      type="text"
+                      value={scene.name}
+                      onChange={(e) => updateActiveSceneInfo('name', e.target.value)}
+                      className={`bg-transparent text-sm font-bold focus:outline-none w-full truncate border-b border-transparent focus:border-neutral-700 ${activeSceneId === scene.id ? 'text-white' : 'text-neutral-400'}`}
+                      onClick={(e) => e.stopPropagation()} 
+                      placeholder="Scene Name"
+                    />
+                    {scenes.length > 1 && (
+                      <button 
+                        onClick={(e) => deleteScene(scene.id, e)}
+                        className="text-neutral-600 hover:text-red-500 transition-colors p-0.5"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Mid: Stats */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-1 bg-neutral-800/50 px-2 py-1 rounded text-[10px] text-neutral-400 border border-neutral-800">
+                      <Clock size={10} />
+                      {scene.data.duration}s
+                    </div>
+                     <div className="text-[10px] text-neutral-500 truncate flex-1 text-right">
+                       {scene.data.fps === FPS.FPS_60 ? '60fps' : '30fps'} / {scene.data.resolution}
+                     </div>
+                  </div>
+
+                  {/* Description Preview */}
+                  <p className="text-[10px] text-neutral-500 line-clamp-2 h-8 mb-3 leading-tight">
+                    {scene.description || "No description provided."}
+                  </p>
+
+                  {/* Footer: Price */}
+                  <div className={`mt-auto pt-3 border-t ${activeSceneId === scene.id ? 'border-neutral-800' : 'border-neutral-900'}`}>
+                    <div className="text-xs text-neutral-500 uppercase font-semibold">Estimate</div>
+                    <div className={`text-lg font-bold truncate leading-none mt-1 ${activeSceneId === scene.id ? 'text-yellow-500' : 'text-neutral-400'}`}>
+                       {formatMoney(sceneTotal)}
+                    </div>
+                  </div>
+
+                  {/* Active Indicator Strip */}
+                  {activeSceneId === scene.id && (
+                    <div className="absolute left-0 top-4 bottom-4 w-1 bg-gradient-to-b from-yellow-500 to-red-600 rounded-r-full"></div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* Left Column: Controls */}
@@ -268,34 +395,51 @@ const App: React.FC = () => {
             <section>
               <h2 className="text-2xl font-bold mb-4 text-white flex items-center gap-2">
                 <span className="w-1 h-8 bg-red-600 rounded-full"></span>
-                Base Parameters
+                {activeScene.name} Parameters
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-neutral-900/50 p-6 rounded-2xl border border-neutral-800">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-400 mb-2">Base Price (MMK / sec)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-xs font-bold">MMK</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={shotData.basePrice}
-                      onChange={handleNumberChange('basePrice')}
-                      className="w-full bg-black border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all"
-                    />
+              
+              <div className="bg-neutral-900/50 p-6 rounded-2xl border border-neutral-800 space-y-6">
+                 {/* Row 1: Base Price & Duration */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-400 mb-2">Base Price (MMK / sec)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-xs font-bold">MMK</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={activeShotData.basePrice}
+                        onChange={handleNumberChange('basePrice')}
+                        className="w-full bg-black border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-400 mb-2">Shot Duration (Seconds)</label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
+                      <input
+                        type="number"
+                        min="0"
+                        value={activeShotData.duration}
+                        onChange={handleNumberChange('duration')}
+                        className="w-full bg-black border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
+
+                {/* Row 2: Description */}
                 <div>
-                  <label className="block text-sm font-medium text-neutral-400 mb-2">Shot Duration (Seconds)</label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={16} />
-                    <input
-                      type="number"
-                      min="0"
-                      value={shotData.duration}
-                      onChange={handleNumberChange('duration')}
-                      className="w-full bg-black border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all"
-                    />
-                  </div>
+                   <label className="block text-sm font-medium text-neutral-400 mb-2 flex items-center gap-2">
+                     <AlignLeft size={16} /> Scene Description
+                   </label>
+                   <textarea
+                      value={activeScene.description || ''}
+                      onChange={(e) => updateActiveSceneInfo('description', e.target.value)}
+                      placeholder="Enter a brief description of the shot (e.g. 'Hero character jumps over burning car'). This will appear on the Scene Card."
+                      className="w-full bg-black border border-neutral-800 rounded-lg py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all h-24 text-sm resize-none"
+                   />
                 </div>
               </div>
             </section>
@@ -307,7 +451,7 @@ const App: React.FC = () => {
               <InputGroup label="Resolution" icon={<Monitor size={18}/>} description="Higher resolution adds surcharge relative to base price.">
                 <RadioCards 
                   options={Object.values(Resolution)} 
-                  value={shotData.resolution} 
+                  value={activeShotData.resolution} 
                   onChange={handleComplexityChange('resolution')} 
                   colorMap={{
                     [Resolution.RES_1080]: 'bg-neutral-900 border-neutral-800 text-neutral-400',
@@ -317,10 +461,10 @@ const App: React.FC = () => {
                 />
               </InputGroup>
 
-              <InputGroup label="Frame Rate" icon={<Zap size={18}/>} description="60 FPS doubles the resolution cost surcharge.">
+              <InputGroup label="Frame Rate" icon={<Zap size={18}/>} description="60 FPS adds a 20% surcharge to the TOTAL scene estimate.">
                 <RadioCards 
                   options={Object.values(FPS)} 
-                  value={shotData.fps} 
+                  value={activeShotData.fps} 
                   onChange={handleComplexityChange('fps')} 
                   labels={{[FPS.FPS_30]: '30 FPS', [FPS.FPS_60]: '60 FPS'}}
                   colorMap={{
@@ -338,7 +482,7 @@ const App: React.FC = () => {
               <InputGroup label="Roto" icon={<ScanFace size={18}/>} description="Isolating objects frame-by-frame to separate them from the background (Rotoscoping).">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.roto} 
+                  value={activeShotData.roto} 
                   onChange={handleComplexityChange('roto')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.ROTO}
@@ -348,7 +492,7 @@ const App: React.FC = () => {
               <InputGroup label="Cleanup / Paint" icon={<Wand2 size={18}/>} description="Removing unwanted elements like wires, rigs, tracking markers, or blemishes.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.cleanup} 
+                  value={activeShotData.cleanup} 
                   onChange={handleComplexityChange('cleanup')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.CLEANUP}
@@ -358,7 +502,7 @@ const App: React.FC = () => {
               <InputGroup label="Keying (Green Screen)" icon={<BoxSelect size={18}/>} description="Extracting subjects from green/blue screens to replace the background.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.keying} 
+                  value={activeShotData.keying} 
                   onChange={handleComplexityChange('keying')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.KEYING}
@@ -369,7 +513,7 @@ const App: React.FC = () => {
                 <InputGroup label="Camera Tracking" icon={<Camera size={18}/>} description="Deriving the movement of the physical camera to match it in 3D space.">
                     <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.cameraTracking} 
+                    value={activeShotData.cameraTracking} 
                     onChange={handleComplexityChange('cameraTracking')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.TRACKING}
@@ -379,7 +523,7 @@ const App: React.FC = () => {
                 <InputGroup label="Object Tracking" icon={<BoxSelect size={18}/>} description="Tracking the movement of specific objects or actors for 3D interaction.">
                     <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.objectTracking} 
+                    value={activeShotData.objectTracking} 
                     onChange={handleComplexityChange('objectTracking')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.TRACKING}
@@ -390,7 +534,7 @@ const App: React.FC = () => {
               <InputGroup label="Match Move" icon={<Move size={18}/>} description="Precise alignment of CG elements to the live-action footage perspective.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.matchMove} 
+                  value={activeShotData.matchMove} 
                   onChange={handleComplexityChange('matchMove')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.MATCH_MOVE}
@@ -406,7 +550,7 @@ const App: React.FC = () => {
                 <InputGroup label="3D Model" icon={<Cuboid size={18}/>} description="Creating digital 3D geometry for characters, props, or vehicles. Flat fee.">
                   <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.model3d} 
+                    value={activeShotData.model3d} 
                     onChange={handleComplexityChange('model3d')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.MODEL_3D}
@@ -416,7 +560,7 @@ const App: React.FC = () => {
                 <InputGroup label="Rigging" icon={<Workflow size={18}/>} description="Building the digital skeleton and controls for animation. Flat fee.">
                   <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.rigging} 
+                    value={activeShotData.rigging} 
                     onChange={handleComplexityChange('rigging')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.RIGGING}
@@ -428,7 +572,7 @@ const App: React.FC = () => {
                 <InputGroup label="Scene Reconstruct" icon={<HardHat size={18}/>} description="Building a 3D proxy of the set for lighting reference and collisions. Flat fee.">
                     <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.sceneReconstruction} 
+                    value={activeShotData.sceneReconstruction} 
                     onChange={handleComplexityChange('sceneReconstruction')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.SCENE_RECON}
@@ -438,7 +582,7 @@ const App: React.FC = () => {
                 <InputGroup label="Props & Environment" icon={<Tent size={18}/>} description="Creating digital set dressing and background elements. Flat fee.">
                     <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.propsEnvs} 
+                    value={activeShotData.propsEnvs} 
                     onChange={handleComplexityChange('propsEnvs')}
                     colorMap={complexityColors}
                     descriptions={OPTION_DETAILS.PROPS_ENV}
@@ -454,7 +598,7 @@ const App: React.FC = () => {
               <InputGroup label="Keyframe Animation" icon={<Play size={18}/>} description="Manual frame-by-frame animation for stylized or complex character performance.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.animation} 
+                  value={activeShotData.animation} 
                   onChange={handleComplexityChange('animation')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.ANIMATION}
@@ -464,7 +608,7 @@ const App: React.FC = () => {
               <InputGroup label="Mocap Cleanup" icon={<User size={18}/>} description="Refining raw motion capture data to fix jitters and sliding feet.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.mocap} 
+                  value={activeShotData.mocap} 
                   onChange={handleComplexityChange('mocap')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.MOCAP}
@@ -474,7 +618,7 @@ const App: React.FC = () => {
               <InputGroup label="Simulation (FX)" icon={<Flame size={18}/>} description="Physics-based simulations for fire, water, smoke, cloth, or destruction.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.simulation} 
+                  value={activeShotData.simulation} 
                   onChange={handleComplexityChange('simulation')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.SIMULATION}
@@ -489,7 +633,7 @@ const App: React.FC = () => {
               <InputGroup label="3D Compositing" icon={<Layers size={18}/>} description="Integrating multi-pass 3D renders with live-action footage.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.compositing3d} 
+                  value={activeShotData.compositing3d} 
                   onChange={handleComplexityChange('compositing3d')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.COMPOSITING_3D}
@@ -499,7 +643,7 @@ const App: React.FC = () => {
               <InputGroup label="2D Compositing" icon={<Layers size={18}/>} description="Layer-based blending, color correction, and integration of 2D elements.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.compositing2d} 
+                  value={activeShotData.compositing2d} 
                   onChange={handleComplexityChange('compositing2d')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.COMPOSITING_2D}
@@ -509,7 +653,7 @@ const App: React.FC = () => {
               <InputGroup label="Layer Animation" icon={<Sparkles size={18}/>} description="Animating 2D graphics, user interfaces (HUDs), or motion graphics.">
                 <RadioCards 
                   options={Object.values(Complexity)} 
-                  value={shotData.layerAnimation} 
+                  value={activeShotData.layerAnimation} 
                   onChange={handleComplexityChange('layerAnimation')}
                   colorMap={complexityColors}
                   descriptions={OPTION_DETAILS.LAYER_ANIM}
@@ -525,7 +669,7 @@ const App: React.FC = () => {
                 <InputGroup label="Urgent Delivery" icon={<Timer size={18}/>} description="Rush fee multiplier for tight deadlines.">
                   <RadioCards 
                     options={Object.values(Complexity)} 
-                    value={shotData.urgent} 
+                    value={activeShotData.urgent} 
                     onChange={handleComplexityChange('urgent')}
                     colorMap={urgentColors}
                     descriptions={OPTION_DETAILS.URGENT}
@@ -535,7 +679,7 @@ const App: React.FC = () => {
                 <InputGroup label="Creative Brief" icon={<FileText size={18}/>} description="If brief is not clear, 40% surcharge is applied for R&D.">
                   <RadioCards 
                     options={Object.values(BriefType)} 
-                    value={shotData.brief} 
+                    value={activeShotData.brief} 
                     onChange={handleComplexityChange('brief')}
                     colorMap={briefColors}
                     descriptions={OPTION_DETAILS.BRIEF}
@@ -547,7 +691,7 @@ const App: React.FC = () => {
                 <InputGroup label="On-Scene Supervisor" icon={<Users size={18}/>} description="Selecting 'Yes' applies a 5% discount for on-set supervision.">
                   <RadioCards 
                     options={Object.values(Management)} 
-                    value={shotData.onSceneManagement} 
+                    value={activeShotData.onSceneManagement} 
                     onChange={handleComplexityChange('onSceneManagement')}
                     labels={{ [Management.YES]: 'Yes (-5%)', [Management.NO]: 'No' }}
                     colorMap={reelColors}
@@ -557,7 +701,7 @@ const App: React.FC = () => {
                 <InputGroup label="Allow on Reel" icon={<Film size={18}/>} description="Granting usage rights for the studio's showreel applies a 5% discount.">
                   <RadioCards 
                     options={Object.values(ReelPermission)} 
-                    value={shotData.allowOnReel} 
+                    value={activeShotData.allowOnReel} 
                     onChange={handleComplexityChange('allowOnReel')}
                     labels={{ [ReelPermission.NO]: 'No', [ReelPermission.YES]: 'Yes (-5%)' }}
                     colorMap={reelColors}
@@ -570,7 +714,13 @@ const App: React.FC = () => {
 
           {/* Right Column: Results */}
           <div className="lg:col-span-5">
-            <ResultsPanel breakdown={breakdown} duration={shotData.duration} />
+            <ResultsPanel 
+              activeBreakdown={breakdown} 
+              activeScene={activeScene}
+              allScenes={scenes}
+              onImportProject={handleImportClick}
+              onExportProject={handleExportProject}
+            />
           </div>
 
         </div>
