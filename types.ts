@@ -27,6 +27,11 @@ export enum ReelPermission {
   YES = 'Yes',
 }
 
+export enum BriefType {
+  CLEAR = 'Clear',
+  NOT_CLEAR = 'Not Clear',
+}
+
 export interface VFXShotData {
   basePrice: number;
   duration: number;
@@ -59,7 +64,7 @@ export interface VFXShotData {
 
   // Extras
   urgent: Complexity;
-  brief: Complexity;
+  brief: BriefType;
 
   // Discounts/Admin
   onSceneManagement: Management;
